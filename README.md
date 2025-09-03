@@ -1,53 +1,74 @@
-<h1 align="center">PGO: The Postgres Operator from Crunchy Data</h1>
+# PostgreSQL AGE Operator
+
 <p align="center">
-  <img width="150" src="./img/CrunchyDataPrimaryIcon.png" alt="PGO: The Postgres Operator from Crunchy Data"/>
+  <img width="200" src="https://age.apache.org/age-manual/master/_static/age_logo.png" alt="Apache AGE"/>
 </p>
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/CrunchyData/postgres-operator)](https://goreportcard.com/report/github.com/CrunchyData/postgres-operator)
-![GitHub Repo stars](https://img.shields.io/github/stars/CrunchyData/postgres-operator)
-[![License](https://img.shields.io/github/license/CrunchyData/postgres-operator)](LICENSE.md)
-[![Discord](https://img.shields.io/discord/1068276526740676708?label=discord&logo=discord)](https://discord.gg/a7vWKG8Ec9)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gregoriomomm/postgres-age-operator)](https://goreportcard.com/report/github.com/gregoriomomm/postgres-age-operator)
+![GitHub Repo stars](https://img.shields.io/github/stars/gregoriomomm/postgres-age-operator)
+[![License](https://img.shields.io/github/license/gregoriomomm/postgres-age-operator)](LICENSE.md)
 
-# Production Postgres Made Easy
+# Production-Ready Graph Database on Kubernetes
 
-[PGO](https://github.com/CrunchyData/postgres-operator), the [Postgres Operator](https://github.com/CrunchyData/postgres-operator) from [Crunchy Data](https://www.crunchydata.com), gives you a **declarative Postgres** solution that automatically manages your [PostgreSQL](https://www.postgresql.org) clusters.
+The **PostgreSQL AGE Operator** brings the power of [Apache AGE](https://age.apache.org/) (A Graph Extension) to Kubernetes, providing a **declarative graph database** solution that automatically manages your [PostgreSQL](https://www.postgresql.org) clusters with native graph capabilities.
 
-Designed for your GitOps workflows, it is [easy to get started](https://access.crunchydata.com/documentation/postgres-operator/v5/quickstart/) with Postgres on Kubernetes with PGO. Within a few moments, you can have a production-grade Postgres cluster complete with high availability, disaster recovery, and monitoring, all over secure TLS communications. Even better, PGO lets you easily customize your Postgres cluster to tailor it to your workload!
+Based on the proven architecture of the Crunchy Data PostgreSQL Operator, this operator extends PostgreSQL with Apache AGE to deliver enterprise-grade graph database functionality with the reliability and features you expect from PostgreSQL.
 
-With conveniences like cloning Postgres clusters to using rolling updates to roll out disruptive changes with minimal downtime, PGO is ready to support your Postgres data at every stage of your release pipeline. Built for resiliency and uptime, PGO will keep your Postgres cluster in its desired state, so you do not need to worry about it.
+## What is Apache AGE?
 
-PGO is developed with many years of production experience in automating Postgres management on Kubernetes, providing a seamless cloud native Postgres solution to keep your data always available.
+[Apache AGE](https://age.apache.org/) is an extension for PostgreSQL that provides graph database functionality. It allows you to:
+- Store and query graph data using Cypher query language
+- Combine SQL and Cypher in the same query
+- Leverage PostgreSQL's reliability, ACID compliance, and ecosystem
+- Build modern applications with relationships at their core
 
-Have questions or looking for help? [Join our Discord group](https://discord.gg/a7vWKG8Ec9).
+## Why PostgreSQL AGE Operator?
 
-# Installation
+This operator makes it easy to deploy and manage PostgreSQL clusters with AGE on Kubernetes, providing:
 
-Crunchy Data makes PGO available as the orchestration behind Crunchy Postgres for Kubernetes. Crunchy Postgres for Kubernetes is the integrated product that includes PostgreSQL, PGO and a collection of PostgreSQL tools and extensions that includes the various [open source components listed in the documentation](https://access.crunchydata.com/documentation/postgres-operator/latest/references/components).
+✅ **Graph + Relational**: Best of both worlds - graph queries with Cypher, relational queries with SQL  
+✅ **Cloud Native**: Designed for Kubernetes from the ground up  
+✅ **High Availability**: Automatic failover and replica management  
+✅ **Production Ready**: Based on battle-tested Crunchy PostgreSQL Operator  
+✅ **GitOps Friendly**: Declarative configuration for your entire database stack
 
-We recommend following our [Quickstart](https://access.crunchydata.com/documentation/postgres-operator/v5/quickstart/) for how to install and get up and running. However, if you can't wait to try it out, here are some instructions to get Postgres up and running on Kubernetes:
+## Quick Start
 
-1. [Fork the Postgres Operator examples repository](https://github.com/CrunchyData/postgres-operator-examples/fork) and clone it to your host machine. For example:
+Get a graph database running in under 5 minutes:
 
-```sh
-YOUR_GITHUB_UN="<your GitHub username>"
-git clone --depth 1 "git@github.com:${YOUR_GITHUB_UN}/postgres-operator-examples.git"
-cd postgres-operator-examples
-```
+```bash
+# Clone the repository
+git clone https://github.com/gregoriomomm/postgres-age-operator
+cd postgres-age-operator
 
-2. Run the following commands
+# Build the AGE-enabled image
+docker build -f Dockerfile.age -t localhost/postgres-age-patroni .
 
-```sh
-kubectl apply -k kustomize/install/namespace
-kubectl apply --server-side -k kustomize/install/default
-```
+# For Kind clusters: Load the image
+kind load docker-image localhost/postgres-age-patroni
 
-For more information please read the [Quickstart](https://access.crunchydata.com/documentation/postgres-operator/v5/quickstart/) and [Tutorial](https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/).
+# Deploy the operator
+kubectl apply --server-side -k config/default
 
-These installation instructions provide the steps necessary to install PGO along with Crunchy Data's Postgres distribution, Crunchy Postgres, as Crunchy Postgres for Kubernetes. In doing so the installation downloads a series of container images from Crunchy Data's Developer Portal. For more information on the use of container images downloaded from the Crunchy Data Developer Portal or other third party sources, please see 'License and Terms' below. The installation and use of PGO outside of the use of Crunchy Postgres for Kubernetes will require modifications of these installation instructions and creation of the necessary PostgreSQL and related containers.  
+# Create an AGE cluster
+kubectl apply -k examples/age-cluster/
 
-# Cloud Native Postgres for Kubernetes
+# Connect and start using graphs!
+kubectl exec -it -n postgres-operator \
+  $(kubectl get pod -n postgres-operator -l postgres-operator.crunchydata.com/role=master -o name) \
+  -c database -- psql
+```  
 
-PGO, the Postgres Operator from Crunchy Data, comes with all of the features you need for a complete cloud native Postgres experience on Kubernetes!
+## Features
+
+### 🎯 Graph Database Capabilities
+
+- **Cypher Query Language**: Industry-standard graph query language
+- **Hybrid Queries**: Combine SQL and Cypher in the same query
+- **Graph Algorithms**: Built-in support for common graph algorithms
+- **Visual Data Modeling**: Natural representation of connected data
+
+### 🚀 Enterprise Features
 
 #### PostgreSQL Cluster [Provisioning][provisioning]
 
@@ -185,53 +206,71 @@ In addition to the above, the geospatially enhanced PostgreSQL + PostGIS contain
 
 For more information about which versions of the PostgreSQL Operator include which components, please visit the [compatibility](https://access.crunchydata.com/documentation/postgres-operator/v5/references/components/) section of the documentation.
 
-## [Supported Platforms](https://access.crunchydata.com/documentation/postgres-operator/latest/overview/supported-platforms)
+## Supported Platforms
 
-PGO, the Postgres Operator from Crunchy Data, is tested on the following platforms:
+The PostgreSQL AGE Operator is tested on the following platforms:
 
-- Kubernetes
-- OpenShift
+- Kubernetes 1.21+
+- OpenShift 4.8+
 - Rancher
-- Google Kubernetes Engine (GKE), including Anthos
+- Google Kubernetes Engine (GKE)
 - Amazon EKS
 - Microsoft AKS
 - VMware Tanzu
+- Kind (for local development)
+- Minikube
 
-# Contributing to the Project
+## Installation
 
-Want to contribute to the PostgreSQL Operator project? Great! We've put together
-a set of contributing guidelines that you can review here:
+### Prerequisites
 
-- [Contributing Guidelines](CONTRIBUTING.md)
+- Kubernetes 1.21+ or OpenShift 4.8+
+- kubectl configured
+- Docker for building images
 
-Once you are ready to submit a Pull Request, please ensure you do the following:
+### Quick Install on Kind
 
-1. Reviewing the [contributing guidelines](CONTRIBUTING.md) and ensure
-   that you have followed the commit message format, added testing where
-   appropriate, documented your changes, etc.
-1. Open up a pull request based upon the guidelines. If you are adding a new
-   feature, please open up the pull request on the `main` branch.
-1. Please be as descriptive in your pull request as possible. If you are
-   referencing an issue, please be sure to include the issue in your pull request
+```bash
+# Create a Kind cluster
+kind create cluster --name age-demo
+
+# Build and load the image
+docker build -f Dockerfile.age -t localhost/postgres-age-patroni .
+kind load docker-image localhost/postgres-age-patroni --name age-demo
+
+# Deploy operator
+kubectl apply --server-side -k config/default
+
+# Create your first graph database
+kubectl apply -k examples/age-cluster/
+```
+
+For production deployments, see [AGE-INTEGRATION.md](AGE-INTEGRATION.md).
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Areas where we need help:
+- Testing on different Kubernetes distributions
+- Additional graph algorithm implementations
+- Performance benchmarking
+- Documentation improvements
+- Example applications
 
 ## Support
 
-If you believe you have found a bug or have a detailed feature request, please open a GitHub issue and follow the guidelines for submitting a bug.
+- **Issues**: [GitHub Issues](https://github.com/gregoriomomm/postgres-age-operator/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/gregoriomomm/postgres-age-operator/discussions)
+- **Apache AGE**: [AGE Documentation](https://age.apache.org/)
 
-For general questions or community support, we welcome you to join our [community Discord](https://discord.gg/a7vWKG8Ec9) and ask your questions there.
+## Documentation
 
-For other information, please visit the [Support](https://access.crunchydata.com/documentation/postgres-operator/latest/support/) section of the documentation.
-
-# Documentation
-
-For additional information regarding the design, configuration, and operation of the
-PostgreSQL Operator, pleases see the [Official Project Documentation][documentation].
-
-[documentation]: https://access.crunchydata.com/documentation/postgres-operator/latest/
-
-## Past Versions
-
-Documentation for previous releases can be found at the [Crunchy Data Access Portal](https://access.crunchydata.com/documentation/).
+- [Installation Guide](AGE-INTEGRATION.md#installation-options) - Detailed setup instructions
+- [Operator Management](AGE-INTEGRATION.md#operator-management) - Managing the operator
+- [Deployment Configurations](AGE-INTEGRATION.md#deployment-configurations) - Various deployment patterns
+- [Advanced Operations](AGE-INTEGRATION.md#advanced-operations) - Day-2 operations
+- [Troubleshooting](AGE-INTEGRATION.md#troubleshooting-operations) - Common issues and solutions
 
 # Releases
 
