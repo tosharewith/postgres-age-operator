@@ -1,0 +1,518 @@
+// Copyright 2021 - 2025 Crunchy Data Solutions, Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"path"
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/crunchydata/postgres-operator/internal/config"
+	"github.com/crunchydata/postgres-operator/internal/feature"
+	"github.com/crunchydata/postgres-operator/internal/naming"
+	"github.com/crunchydata/postgres-operator/internal/shell"
+	"github.com/crunchydata/postgres-operator/pkg/apis/postgres-operator.crunchydata.com/v1beta1"
+)
+
+const (
+	// bashDataDirectory is a Bash function that ensures a directory has the correct permissions for PostgreSQL data.
+	//
+	// Postgres requires its data directories be writable by only itself.
+	// Pod "securityContext.fsGroup" sets g+w on directories for *some* storage providers.
+	// Ensure the current user owns the directory, and remove group-write permission.
+	//
+	// - https://www.postgresql.org/docs/current/creating-cluster.html
+	// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/backend/postmaster/postmaster.c;hb=REL_10_0#l1522
+	// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/backend/utils/init/miscinit.c;hb=REL_11_0#l142
+	// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/backend/utils/init/miscinit.c;hb=REL_17_0#l386
+	// - https://issue.k8s.io/93802#issuecomment-717646167
+	//
+	// During CREATE TABLESPACE, Postgres sets the permissions of a tablespace directory to match the data directory.
+	//
+	// - https://www.postgresql.org/docs/current/manage-ag-tablespaces.html
+	// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/backend/commands/tablespace.c;hb=REL_14_0#l600
+	// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/common/file_perm.c;hb=REL_14_0#l27
+	//
+	bashDataDirectory = `dataDirectory() {` +
+		// When the directory does not exist, create it with the correct permissions.
+		// When the directory has the correct owner, set the correct permissions.
+		` if [[ ! -e "$1" || -O "$1" ]]; then install --directory --mode=0750 "$1";` +
+		//
+		// The directory exists but its owner is wrong.
+		// When it is writable, the set-group-ID bit indicates that "fsGroup" probably ran on its contents making them safe to use.
+		// In this case, we can make a new directory (owned by this user) and refill it.
+		` elif [[ -w "$1" && -g "$1" ]]; then recreate "$1" '0750';` +
+		//
+		// The directory exists, its owner is wrong, and it is not writable.
+		// This is probably fatal, but indicate failure to let the caller decide.
+		` else false; fi; }`
+
+	// bashHalt is a Bash function that prints its arguments to stderr then
+	// exits with a non-zero status. It uses the exit status of the prior
+	// command if that was not zero.
+	bashHalt = `halt() { local rc=$?; >&2 echo "$@"; exit "${rc/#0/1}"; }`
+
+	// bashPermissions is a Bash function that prints the permissions of a file
+	// or directory and all its parent directories, except the root directory.
+	bashPermissions = `permissions() {` +
+		` while [[ -n "$1" ]]; do set "${1%/*}" "$@"; done; shift;` +
+		` stat -Lc '%A %4u %4g %n' "$@";` +
+		` }`
+
+	// bashRecreateDirectory is a Bash function that moves the contents of an
+	// existing directory into a newly created directory of the same name.
+	bashRecreateDirectory = `
+recreate() (
+  local tmp; tmp=$(mktemp -d -p "${1%/*}"); GLOBIGNORE='.:..'; set -x
+  chmod "$2" "${tmp}"; mv "$1"/* "${tmp}"; rmdir "$1"; mv "${tmp}" "$1"
+)
+`
+
+	// bashSafeLink is a Bash function that moves an existing file or directory
+	// and replaces it with a symbolic link.
+	bashSafeLink = `
+safelink() (
+  local desired="$1" name="$2" current
+  current=$(realpath "${name}")
+  if [[ "${current}" == "${desired}" ]]; then return; fi
+  set -x; mv --no-target-directory "${current}" "${desired}"
+  ln --no-dereference --force --symbolic "${desired}" "${name}"
+)
+`
+
+	// dataMountPath is where to mount the main data volume.
+	dataMountPath = "/pgdata"
+
+	// dataMountPath is where to mount the main data volume.
+	tablespaceMountPath = "/tablespaces"
+
+	// tmpMountPath is where to mount the optional ephemeral volume.
+	tmpMountPath = "/pgtmp"
+
+	// walMountPath is where to mount the optional WAL volume.
+	walMountPath = "/pgwal"
+
+	// downwardAPIPath is where to mount the downwardAPI volume.
+	downwardAPIPath = "/etc/database-containerinfo"
+
+	// SocketDirectory is where to bind and connect to UNIX sockets.
+	SocketDirectory = "/tmp/postgres"
+
+	// ReplicationUser is the PostgreSQL role that will be created by Patroni
+	// for streaming replication and for `pg_rewind`.
+	ReplicationUser = "_crunchyrepl"
+
+	// configMountPath is where to mount config files.
+	configMountPath = "/etc/postgres"
+)
+
+// ConfigDirectory returns the absolute path to $PGDATA for cluster.
+// - https://www.postgresql.org/docs/current/runtime-config-file-locations.html
+func ConfigDirectory(cluster *v1beta1.PostgresCluster) string {
+	return DataDirectory(cluster)
+}
+
+// DataDirectory returns the absolute path to the "data_directory" of cluster.
+// - https://www.postgresql.org/docs/current/runtime-config-file-locations.html
+func DataDirectory(cluster *v1beta1.PostgresCluster) string {
+	return fmt.Sprintf("%s/pg%d", DataStorage(cluster), cluster.Spec.PostgresVersion)
+}
+
+// DataStorage returns the absolute path to the disk where cluster stores its data.
+// Use [DataDirectory] for the exact directory that Postgres uses.
+func DataStorage(cluster *v1beta1.PostgresCluster) string {
+	return dataMountPath
+}
+
+// LogRotation returns parameters that rotate log files while keeping a minimum amount.
+// Postgres truncates and reuses log files after that minimum amount.
+// Log file names start with filePrefix and end with fileSuffix.
+//
+// NOTE: These parameters do *not* enable logging to files. Set "logging_collector" for that.
+func LogRotation(minimum metav1.Duration, filePrefix, fileSuffix string) map[string]string {
+	hours := math.Ceil(minimum.Hours())
+
+	// The "log_filename" parameter is interpreted similar to `strftime`;
+	// escape percent U+0025 by doubling it.
+	// - https://www.postgresql.org/docs/current/runtime-config-logging.html#GUC-LOG-FILENAME
+	prefix := strings.ReplaceAll(filePrefix, "%", "%%")
+	suffix := strings.ReplaceAll(fileSuffix, "%", "%%")
+
+	// Postgres can "rotate" its own log files by calculating log_filename as needed.
+	// However, the automated portions of log_filename are *entirely* based on time.
+	// An inappropriate pairing of log_filename with other logging parameters could lose log messages.
+	//
+	// TODO(logs): Limit the size/bytes of logs without losing messages;
+	// probably requires another process that deletes the oldest files. TODO(sidecar)
+	//
+	// The parameter combinations below have Postgres discard log messages and reuse log files
+	// only after the minimum time has elapsed.
+
+	result := map[string]string{
+		// Discard old messages when log_filename is reused due to rotation.
+		"log_truncate_on_rotation": "on",
+
+		// To not lose messages, log_rotation_size must be larger than the volume of messages emitted before log_filename changes.
+		// Rather than monitor and accommodate that, disable rotation by size completely.
+		"log_rotation_size": "0",
+	}
+
+	// These pairings have Postgres log to multiple files so a log consumer
+	// has the opportunity to read a prior file while Postgres truncates the next.
+	switch {
+	case hours <= 1:
+		// One hour of logs in minute-long files
+		result["log_filename"] = prefix + "%M" + suffix
+		result["log_rotation_age"] = "1min"
+
+	case hours <= 24:
+		// One day of logs in hour-long files
+		result["log_filename"] = prefix + "%H" + suffix
+		result["log_rotation_age"] = "1h"
+
+	case hours <= 24*7:
+		// One week of logs in day-long files
+		result["log_filename"] = prefix + "%a" + suffix
+		result["log_rotation_age"] = "1d"
+
+	case hours <= 24*28:
+		// One month of logs in day-long files
+		result["log_filename"] = prefix + "%d" + suffix
+		result["log_rotation_age"] = "1d"
+
+	default:
+		// One year of logs in day-long files
+		result["log_filename"] = prefix + "%j" + suffix
+		result["log_rotation_age"] = "1d"
+	}
+
+	return result
+}
+
+// WALDirectory returns the absolute path to the directory where an instance
+// stores its WAL files.
+// - https://www.postgresql.org/docs/current/wal.html
+func WALDirectory(
+	cluster *v1beta1.PostgresCluster, instance *v1beta1.PostgresInstanceSetSpec,
+) string {
+	return fmt.Sprintf("%s/pg%d_wal", WALStorage(instance), cluster.Spec.PostgresVersion)
+}
+
+// WALStorage returns the absolute path to the disk where an instance stores its
+// WAL files. Use [WALDirectory] for the exact directory that Postgres uses.
+func WALStorage(instance *v1beta1.PostgresInstanceSetSpec) string {
+	if instance.WALVolumeClaimSpec != nil {
+		return walMountPath
+	}
+	// When no WAL volume is specified, store WAL files on the main data volume.
+	return dataMountPath
+}
+
+// Environment returns the environment variables required to invoke PostgreSQL
+// utilities.
+func Environment(cluster *v1beta1.PostgresCluster) []corev1.EnvVar {
+	return []corev1.EnvVar{
+		// - https://www.postgresql.org/docs/current/reference-server.html
+		{
+			Name:  "PGDATA",
+			Value: ConfigDirectory(cluster),
+		},
+
+		// - https://www.postgresql.org/docs/current/libpq-envars.html
+		{
+			Name:  "PGHOST",
+			Value: SocketDirectory,
+		},
+		{
+			Name:  "PGPORT",
+			Value: fmt.Sprint(*cluster.Spec.Port),
+		},
+		// Setting the KRB5_CONFIG for kerberos
+		// - https://web.mit.edu/kerberos/krb5-current/doc/admin/conf_files/krb5_conf.html
+		{
+			Name:  "KRB5_CONFIG",
+			Value: configMountPath + "/krb5.conf",
+		},
+		// In testing it was determined that we need to set this env var for the replay cache
+		// otherwise it defaults to the read-only location `/var/tmp/`
+		// - https://web.mit.edu/kerberos/krb5-current/doc/basic/rcache_def.html#replay-cache-types
+		{
+			Name:  "KRB5RCACHEDIR",
+			Value: "/tmp",
+		},
+		// This allows a custom CA certificate to be mounted for Postgres LDAP
+		// authentication via spec.config.files.
+		// - https://wiki.postgresql.org/wiki/LDAP_Authentication_against_AD
+		//
+		// When setting the TLS_CACERT for LDAP as an environment variable, 'LDAP'
+		// must be appended as a prefix.
+		// - https://www.openldap.org/software/man.cgi?query=ldap.conf
+		//
+		// Testing with LDAPTLS_CACERTDIR did not work as expected during testing.
+		{
+			Name:  "LDAPTLS_CACERT",
+			Value: configMountPath + "/ldap/ca.crt",
+		},
+	}
+}
+
+// reloadCommand returns an entrypoint that convinces PostgreSQL to reload
+// certificate files when they change. The process will appear as name in `ps`
+// and `top`.
+func reloadCommand(name string) []string {
+	// Use a Bash loop to periodically check the mtime of the mounted
+	// certificate volume. When it changes, copy the replication certificate,
+	// signal PostgreSQL, and print the observed timestamp.
+	//
+	// PostgreSQL v10 reads its server certificate files during reload (SIGHUP).
+	// - https://www.postgresql.org/docs/current/ssl-tcp.html#SSL-SERVER-FILES
+	// - https://www.postgresql.org/docs/current/app-postgres.html
+	//
+	// PostgreSQL reads its replication credentials every time it opens a
+	// replication connection. It does not need to be signaled when the
+	// certificate contents change.
+	//
+	// The copy is necessary because Kubernetes sets g+r when fsGroup is enabled,
+	// but PostgreSQL requires client keys to not be readable by other users.
+	// - https://www.postgresql.org/docs/current/libpq-ssl.html
+	// - https://issue.k8s.io/57923
+	//
+	// Coreutils `sleep` uses a lot of memory, so the following opens a file
+	// descriptor and uses the timeout of the builtin `read` to wait. That same
+	// descriptor gets closed and reopened to use the builtin `[ -nt` to check
+	// mtimes.
+	// - https://unix.stackexchange.com/a/407383
+	script := fmt.Sprintf(`
+# Parameters for curl when managing autogrow annotation.
+APISERVER="https://kubernetes.default.svc"
+SERVICEACCOUNT="/var/run/secrets/kubernetes.io/serviceaccount"
+NAMESPACE=$(cat ${SERVICEACCOUNT}/namespace)
+TOKEN=$(cat ${SERVICEACCOUNT}/token)
+CACERT=${SERVICEACCOUNT}/ca.crt
+
+# Manage autogrow annotation.
+# Return size in Mebibytes.
+manageAutogrowAnnotation() {
+  local volume=$1
+
+  size=$(df --human-readable --block-size=M /"${volume}" | awk 'FNR == 2 {print $2}')
+  use=$(df --human-readable /"${volume}" | awk 'FNR == 2 {print $5}')
+  sizeInt="${size//M/}"
+  # Use the sed punctuation class, because the shell will not accept the percent sign in an expansion.
+  useInt=$(echo $use | sed 's/[[:punct:]]//g')
+  triggerExpansion="$((useInt > 75))"
+  if [ $triggerExpansion -eq 1 ]; then
+    newSize="$(((sizeInt / 2)+sizeInt))"
+    newSizeMi="${newSize}Mi"
+    d='[{"op": "add", "path": "/metadata/annotations/suggested-'"${volume}"'-pvc-size", "value": "'"$newSizeMi"'"}]'
+    curl --cacert ${CACERT} --header "Authorization: Bearer ${TOKEN}" -XPATCH "${APISERVER}/api/v1/namespaces/${NAMESPACE}/pods/${HOSTNAME}?fieldManager=kubectl-annotate" -H "Content-Type: application/json-patch+json" --data "$d"
+  fi
+}
+
+declare -r directory=%q
+exec {fd}<> <(:||:)
+while read -r -t 5 -u "${fd}" ||:; do
+  # Manage replication certificate.
+  if [[ "${directory}" -nt "/proc/self/fd/${fd}" ]] &&
+    install -D --mode=0600 -t %q "${directory}"/{%s,%s,%s} &&
+    pkill -HUP --exact --parent=1 postgres
+  then
+    exec {fd}>&- && exec {fd}<> <(:||:)
+    stat --format='Loaded certificates dated %%y' "${directory}"
+  fi
+
+  # manage autogrow annotation for the pgData volume
+  manageAutogrowAnnotation "pgdata"
+done
+`,
+		naming.CertMountPath,
+		naming.ReplicationTmp,
+		naming.ReplicationCertPath,
+		naming.ReplicationPrivateKeyPath,
+		naming.ReplicationCACertPath,
+	)
+
+	// this is used to close out the while loop started above after adding the required
+	// auto grow annotation scripts
+	// finalDone := `done
+	// `
+
+	// Elide the above script from `ps` and `top` by wrapping it in a function
+	// and calling that.
+	wrapper := `monitor() {` + script + `}; export -f monitor; exec -a "$0" bash -ceu monitor`
+
+	return []string{"bash", "-ceu", "--", wrapper, name}
+}
+
+// startupCommand returns an entrypoint that prepares the filesystem for
+// PostgreSQL.
+func startupCommand(
+	ctx context.Context,
+	cluster *v1beta1.PostgresCluster,
+	instance *v1beta1.PostgresInstanceSetSpec,
+	parameters *ParameterSet,
+) []string {
+	version := fmt.Sprint(cluster.Spec.PostgresVersion)
+	dataDir := DataDirectory(cluster)
+	logDir := parameters.Value("log_directory")
+	walDir := WALDirectory(cluster, instance)
+
+	mkdirs := make([]string, 0, 9+len(instance.TablespaceVolumes))
+	mkdirs = append(mkdirs, `dataDirectory "${postgres_data_directory}" || halt "$(permissions "${postgres_data_directory}" ||:)"`)
+
+	// If the user requests tablespaces, we want to make sure the directories exist with the correct owner and permissions.
+	//
+	// The path for tablespaces volumes is /tablespaces/NAME/data -- the `data` directory is so we can arrange the permissions.
+	if feature.Enabled(ctx, feature.TablespaceVolumes) {
+		for _, tablespace := range instance.TablespaceVolumes {
+			dir := shell.QuoteWord("/tablespaces/" + tablespace.Name + "/data")
+			mkdirs = append(mkdirs, `dataDirectory `+dir+` || halt "$(permissions `+dir+` ||:)"`)
+		}
+	}
+
+	// Postgres creates "log_directory" but does *not* create any of its parent directories.
+	// Postgres omits group-write S_IWGRP permission when creating the directory.
+	//
+	// Do both here while being careful to *not* touch "data_directory" contents until after
+	// `initdb` or Patroni bootstrap; those abort unless "data_directory" is entirely empty.
+	if path.IsAbs(logDir) && !strings.HasPrefix(logDir, dataDir) {
+		mkdirs = append(mkdirs,
+			`(`+shell.MakeDirectories(dataMountPath, logDir)+`) ||`,
+			`halt "$(permissions `+shell.QuoteWord(logDir)+` ||:)"`,
+		)
+	} else {
+		// Postgres interprets "log_directory" relative to "data_directory" so do the same here.
+		mkdirs = append(mkdirs,
+			`[[ ! -f `+shell.QuoteWord(path.Join(dataDir, "PG_VERSION"))+` ]] ||`,
+			`(`+shell.MakeDirectories(dataDir, logDir)+`) ||`,
+			`halt "$(permissions `+shell.QuoteWord(path.Join(dataDir, logDir))+` ||:)"`,
+		)
+	}
+
+	// These directories are outside "data_directory" and can be created.
+	mkdirs = append(mkdirs,
+		`(`+shell.MakeDirectories(dataMountPath, naming.PatroniPGDataLogPath)+`) ||`,
+		`halt "$(permissions `+shell.QuoteWord(naming.PatroniPGDataLogPath)+` ||:)"`,
+
+		`(`+shell.MakeDirectories(dataMountPath, naming.PGBackRestPGDataLogPath)+`) ||`,
+		`halt "$(permissions `+shell.QuoteWord(naming.PGBackRestPGDataLogPath)+` ||:)"`,
+	)
+
+	pg_rewind_override := ""
+	if config.FetchKeyCommand(&cluster.Spec) != "" {
+		// Quoting "EOF" disables parameter substitution during write.
+		// - https://tldp.org/LDP/abs/html/here-docs.html#EX71C
+		pg_rewind_override = `cat << "EOF" > /tmp/pg_rewind_tde.sh
+#!/bin/sh
+pg_rewind -K "$(postgres -C encryption_key_command)" "$@"
+EOF
+chmod +x /tmp/pg_rewind_tde.sh
+`
+	}
+
+	args := []string{version, walDir}
+	script := strings.Join([]string{
+		`declare -r expected_major_version="$1" pgwal_directory="$2"`,
+
+		// Function to create a Postgres data directory.
+		bashDataDirectory,
+
+		// Function to print the permissions of a file or directory and its parents.
+		bashPermissions,
+
+		// Function to print a message to stderr then exit non-zero.
+		bashHalt,
+
+		// Function to log values in a basic structured format.
+		`results() { printf '::postgres-operator: %s::%s\n' "$@"; }`,
+
+		// Function to change the owner of an existing directory.
+		strings.TrimSpace(bashRecreateDirectory),
+
+		// Function to change a directory symlink while keeping the directory contents.
+		strings.TrimSpace(bashSafeLink),
+
+		// Log the effective user ID and all the group IDs.
+		`echo Initializing ...`,
+		`results 'uid' "$(id -u ||:)" 'gid' "$(id -G ||:)"`,
+
+		// The pgbackrest spool path should be co-located with wal. If a wal volume exists, symlink the spool-path to it.
+		`if [[ "${pgwal_directory}" == *"pgwal/"* ]] && [[ ! -d "/pgwal/pgbackrest-spool" ]];then rm -rf "/pgdata/pgbackrest-spool" && mkdir -p "/pgwal/pgbackrest-spool" && ln --force --symbolic "/pgwal/pgbackrest-spool" "/pgdata/pgbackrest-spool";fi`,
+		// When a pgwal volume is removed, the symlink will be broken; force pgbackrest to recreate spool-path.
+		`if [[ ! -e "/pgdata/pgbackrest-spool" ]];then rm -rf /pgdata/pgbackrest-spool;fi`,
+
+		// Abort when the PostgreSQL version installed in the image does not
+		// match the cluster spec.
+		`results 'postgres path' "$(command -v postgres ||:)"`,
+		`results 'postgres version' "${postgres_version:=$(postgres --version ||:)}"`,
+		`[[ "${postgres_version}" =~ ") ${expected_major_version}"($|[^0-9]) ]] ||`,
+		`halt Expected PostgreSQL version "${expected_major_version}"`,
+
+		// Abort when the configured data directory is not $PGDATA.
+		// - https://www.postgresql.org/docs/current/runtime-config-file-locations.html
+		`results 'config directory' "${PGDATA:?}"`,
+		`postgres_data_directory=$([[ -d "${PGDATA}" ]] && postgres -C data_directory || echo "${PGDATA}")`,
+		`results 'data directory' "${postgres_data_directory}"`,
+		`[[ "${postgres_data_directory}" == "${PGDATA}" ]] ||`,
+		`halt Expected matching config and data directories`,
+
+		// Determine if the data directory has been prepared for bootstrapping the cluster
+		`bootstrap_dir="${postgres_data_directory}_bootstrap"`,
+		`[[ -d "${bootstrap_dir}" ]] && postgres_data_directory="${bootstrap_dir}" && results 'bootstrap directory' "${bootstrap_dir}"`,
+
+		// Create directories for and related to the data directory.
+		strings.Join(mkdirs, "\n"),
+
+		// Copy replication client certificate files
+		// from the /pgconf/tls/replication directory to the /tmp/replication directory in order
+		// to set proper file permissions. This is required because the group permission settings
+		// applied via the defaultMode option are not honored as expected, resulting in incorrect
+		// group read permissions.
+		// See https://github.com/kubernetes/kubernetes/issues/57923
+		// TODO(tjmoore4): remove this implementation when/if defaultMode permissions are set as
+		// expected for the mounted volume.
+		fmt.Sprintf(`install -D --mode=0600 -t %q %q/{%s,%s,%s}`,
+			naming.ReplicationTmp, naming.CertMountPath+naming.ReplicationDirectory,
+			naming.ReplicationCert, naming.ReplicationPrivateKey,
+			naming.ReplicationCACert),
+
+		// Add the pg_rewind wrapper script, if TDE is enabled.
+		pg_rewind_override,
+
+		// When the data directory is empty, there's nothing more to do.
+		`[[ -f "${postgres_data_directory}/PG_VERSION" ]] || exit 0`,
+
+		// Abort when the data directory is not empty and its version does not
+		// match the cluster spec.
+		`results 'data version' "${postgres_data_version:=$(< "${postgres_data_directory}/PG_VERSION")}"`,
+		`[[ "${postgres_data_version}" == "${expected_major_version}" ]] ||`,
+		`halt Expected PostgreSQL data version "${expected_major_version}"`,
+
+		// For a restore from datasource:
+		// Patroni will complain if there's no `postgresql.conf` file
+		// and PGDATA may be missing that file if this is a restored database
+		// where the conf file was kept elsewhere.
+		`[[ ! -f "${postgres_data_directory}/postgresql.conf" ]] &&`,
+		`touch "${postgres_data_directory}/postgresql.conf"`,
+
+		// Safely move the WAL directory onto the intended volume. PostgreSQL
+		// always writes WAL files in the "pg_wal" directory inside the data
+		// directory. The recommended way to relocate it is with a symbolic
+		// link. `initdb` and `pg_basebackup` have a `--waldir` flag that does
+		// the same.
+		// - https://www.postgresql.org/docs/current/wal-internals.html
+		// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/bin/initdb/initdb.c;hb=REL_13_0#l2718
+		// - https://git.postgresql.org/gitweb/?p=postgresql.git;f=src/bin/pg_basebackup/pg_basebackup.c;hb=REL_13_0#l2621
+		`safelink "${pgwal_directory}" "${postgres_data_directory}/pg_wal"`,
+		`results 'wal directory' "$(realpath "${postgres_data_directory}/pg_wal" ||:)"`,
+	}, "\n")
+
+	return append([]string{"bash", "-ceu", "--", script, "startup"}, args...)
+}

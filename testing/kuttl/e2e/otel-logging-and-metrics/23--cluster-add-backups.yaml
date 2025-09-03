@@ -1,0 +1,6 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+apply:
+- files/23--add-backups.yaml
+assert:
+- files/23-backups-added.yaml

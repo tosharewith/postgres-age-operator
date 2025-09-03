@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: age-init-sql
+  namespace: postgres-operator
+data:
+  init.sql: |
+    -- Load Apache AGE extension
+    LOAD 'age';
+    
+    -- Set search path to include ag_catalog
+    ALTER DATABASE postgres SET search_path = ag_catalog, "$user", public;
+    
+    -- For other databases, users will need to manually set search_path
+    -- or add it to their connection strings

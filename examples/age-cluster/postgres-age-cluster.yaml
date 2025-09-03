@@ -1,0 +1,39 @@
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: age-cluster
+spec:
+  postgresVersion: 16
+  image: localhost/postgres-age-patroni
+  imagePullPolicy: Never
+  
+  # Initialize AGE extension after cluster setup
+  databaseInitSQL:
+    name: age-init-sql
+    key: init.sql
+  
+  instances:
+    - name: instance1
+      dataVolumeClaimSpec:
+        accessModes:
+        - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: 2Gi
+      replicas: 3
+  
+  backups:
+    pgbackrest:
+      repos:
+      - name: repo1
+        volume:
+          volumeClaimSpec:
+            accessModes:
+            - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: 2Gi
+  
+  # Optional: proxy for connection pooling
+  proxy:
+    pgBouncer: {}

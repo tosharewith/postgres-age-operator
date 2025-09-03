@@ -1,0 +1,53 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgo
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  template:
+    spec:
+      containers:
+      - name: operator
+        image: localhost/postgres-age-operator
+        imagePullPolicy: Never
+        env:
+        - name: PGO_INSTALLER
+          value: kustomize
+        - name: PGO_INSTALLER_ORIGIN
+          value: postgres-operator-repo
+        - name: PGO_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: CRUNCHY_DEBUG
+          value: "true"
+        - name: RELATED_IMAGE_POSTGRES_16
+          value: "localhost/postgres-age-patroni"
+        - name: RELATED_IMAGE_POSTGRES_16_GIS_3.3
+          value: "localhost/postgres-age-patroni"
+        - name: RELATED_IMAGE_POSTGRES_16_GIS_3.4
+          value: "localhost/postgres-age-patroni"
+        - name: RELATED_IMAGE_POSTGRES_17
+          value: "localhost/postgres-age-patroni"
+        - name: RELATED_IMAGE_POSTGRES_17_GIS_3.4
+          value: "localhost/postgres-age-patroni"
+        - name: RELATED_IMAGE_PGBACKREST
+          value: "registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi9-2.54.2-2520"
+        - name: RELATED_IMAGE_PGBOUNCER
+          value: "registry.developers.crunchydata.com/crunchydata/crunchy-pgbouncer:ubi9-1.24-2520"
+        - name: RELATED_IMAGE_PGEXPORTER
+          value: "registry.developers.crunchydata.com/crunchydata/crunchy-postgres-exporter:ubi9-0.17.1-2520"
+        - name: RELATED_IMAGE_PGUPGRADE
+          value: "registry.developers.crunchydata.com/crunchydata/crunchy-upgrade:ubi9-17.5-2520"
+        - name: RELATED_IMAGE_STANDALONE_PGADMIN
+          value: "registry.developers.crunchydata.com/crunchydata/crunchy-pgadmin4:ubi9-9.2-2520"
+        - name: RELATED_IMAGE_COLLECTOR
+          value: "registry.developers.crunchydata.com/crunchydata/postgres-operator:ubi9-5.8.2-0"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: [ALL] }
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+      serviceAccountName: pgo

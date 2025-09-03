@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: postgres-operator
+
+labels:
+- includeSelectors: true
+  pairs:
+    # Note: this label differs from the label set in postgres-operator-examples
+    postgres-operator.crunchydata.com/control-plane: postgres-operator
+
+resources:
+- ../crd
+- ../rbac
+- ../manager
+
+images:
+- name: postgres-operator
+  newName: localhost/postgres-age-operator
+  newTag: latest

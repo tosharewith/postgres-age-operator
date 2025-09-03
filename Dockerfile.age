@@ -1,0 +1,46 @@
+FROM apache/age
+
+# Install Python3 and pip for Patroni
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip python3-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Patroni and required dependencies
+RUN pip3 install --break-system-packages --no-cache-dir \
+    patroni[kubernetes]==3.3.4 \
+    psycopg2-binary \
+    python-etcd \
+    boto3
+
+# Install additional PostgreSQL tools and extensions needed by the operator
+RUN apt-get update && \
+    apt-get install -y \
+    postgresql-client-16 \
+    postgresql-16-pgaudit \
+    pgbackrest \
+    curl \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install libnss-wrapper in correct location for Debian
+RUN apt-get update && \
+    apt-get install -y libnss-wrapper && \
+    mkdir -p /usr/lib64 && \
+    ln -sf /usr/lib/x86_64-linux-gnu/libnss_wrapper.so /usr/lib64/libnss_wrapper.so && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set up directory structure expected by the operator
+RUN mkdir -p /tmp/postgres /pgdata /pgwal /tablespaces /pgtmp
+
+# Set up PATH for patroni and postgres binaries
+ENV PATH="/usr/local/bin:/usr/lib/postgresql/16/bin:$PATH"
+
+# AGE extension should already be available in base image
+# Add AGE extension to shared_preload_libraries if not already done
+USER postgres
+EXPOSE 5432 8008
+
+# Default command will be overridden by the operator
+CMD ["postgres"]
