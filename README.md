@@ -1,7 +1,7 @@
 # PostgreSQL AGE Operator
 
 <p align="center">
-  ![age_logo](https://github.ibm.com/mmjc/operator-postgres-age/assets/116146/34785cc5-1067-4692-b16a-d1c8c9a2781e)
+  ![age_logo](./age_logo.png)
 </p>
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gregoriomomm/postgres-age-operator)](https://goreportcard.com/report/github.com/gregoriomomm/postgres-age-operator)
