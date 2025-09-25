@@ -4,9 +4,9 @@
 ![age_logo](age_logo.png)
 
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/gregoriomomm/postgres-age-operator)](https://goreportcard.com/report/github.com/gregoriomomm/postgres-age-operator)
-![GitHub Repo stars](https://img.shields.io/github/stars/gregoriomomm/postgres-age-operator)
-[![License](https://img.shields.io/github/license/gregoriomomm/postgres-age-operator)](LICENSE.md)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tosharewith/postgres-age-operator)](https://goreportcard.com/report/github.com/tosharewith/postgres-age-operator)
+![GitHub Repo stars](https://img.shields.io/github/stars/tosharewith/postgres-age-operator)
+[![License](https://img.shields.io/github/license/tosharewith/postgres-age-operator)](LICENSE.md)
 
 # Production-Ready Graph Database on Kubernetes
 
@@ -38,7 +38,7 @@ Get a graph database running in under 5 minutes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/gregoriomomm/postgres-age-operator
+git clone https://github.com/tosharewith/postgres-age-operator
 cd postgres-age-operator
 
 # Build the AGE-enabled image
@@ -260,8 +260,8 @@ Areas where we need help:
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/gregoriomomm/postgres-age-operator/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/gregoriomomm/postgres-age-operator/discussions)
+- **Issues**: [GitHub Issues](https://github.com/tosharewith/postgres-age-operator/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/tosharewith/postgres-age-operator/discussions)
 - **Apache AGE**: [AGE Documentation](https://age.apache.org/)
 
 ## Documentation
