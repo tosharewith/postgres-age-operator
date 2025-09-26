@@ -14,6 +14,10 @@ The **PostgreSQL AGE Operator** brings the power of [Apache AGE](https://age.apa
 
 Based on the proven architecture of the Crunchy Data PostgreSQL Operator, this operator extends PostgreSQL with Apache AGE to deliver enterprise-grade graph database functionality with the reliability and features you expect from PostgreSQL.
 
+## About This Fork
+
+This is a community-maintained fork of the [Crunchy Data PostgreSQL Operator](https://github.com/CrunchyData/postgres-operator), enhanced with Apache AGE graph database functionality. The original PostgreSQL Operator was developed and is maintained by Crunchy Data Solutions, Inc. This fork is maintained by Greg and focuses specifically on providing graph database capabilities through Apache AGE integration.
+
 ## What is Apache AGE?
 
 [Apache AGE](https://age.apache.org/) is an extension for PostgreSQL that provides graph database functionality. It allows you to:
@@ -29,7 +33,7 @@ This operator makes it easy to deploy and manage PostgreSQL clusters with AGE on
 ✅ **Graph + Relational**: Best of both worlds - graph queries with Cypher, relational queries with SQL  
 ✅ **Cloud Native**: Designed for Kubernetes from the ground up  
 ✅ **High Availability**: Automatic failover and replica management  
-✅ **Production Ready**: Based on battle-tested Crunchy PostgreSQL Operator  
+✅ **Production Ready**: Based on battle-tested Crunchy Data PostgreSQL Operator  
 ✅ **GitOps Friendly**: Declarative configuration for your entire database stack
 
 ## Quick Start
@@ -143,29 +147,29 @@ PGO makes it easy to fully customize your Postgres cluster to tailor to your wor
 
 Deploy PGO to watch Postgres clusters in all of your [namespaces][k8s-namespaces], or [restrict which namespaces][single-namespace] you want PGO to manage Postgres clusters in!
 
-[backups]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/backups
-[backups-s3]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/backups#using-s3
-[backups-gcs]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/backups#using-google-cloud-storage-gcs
-[backups-azure]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/backups#using-azure-blob-storage
-[backups-multi]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/backups#set-up-multiple-backup-repositories
-[backup-management]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/backup-management
-[clone]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/disaster-recovery#clone-a-postgres-cluster
-[customize-cluster]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/day-two/customize-cluster
-[disaster-recovery]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/backups-disaster-recovery/disaster-recovery
-[high-availability]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/day-two/high-availability/
-[monitoring]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/day-two/monitoring/
-[multiple-cluster]: https://access.crunchydata.com/documentation/postgres-operator/v5/architecture/disaster-recovery/#standby-cluster-overview
-[pool]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/basic-setup/connection-pooling/
-[provisioning]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/basic-setup/create-cluster/
-[resize-cluster]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/cluster-management/resize-cluster/
-[single-namespace]: https://access.crunchydata.com/documentation/postgres-operator/v5/installation/kustomize/#installation-mode
-[tls]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/day-two/customize-cluster#customize-tls
-[update-postgres]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/cluster-management/update-cluster
+[backups]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/backups.md
+[backups-s3]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/backups.md#using-s3
+[backups-gcs]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/backups.md#using-google-cloud-storage-gcs
+[backups-azure]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/backups.md#using-azure-blob-storage
+[backups-multi]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/backups.md#set-up-multiple-backup-repositories
+[backup-management]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/backup-management.md
+[clone]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/disaster-recovery.md#clone-a-postgres-cluster
+[customize-cluster]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/customize-cluster.md
+[disaster-recovery]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/disaster-recovery.md
+[high-availability]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/high-availability.md
+[monitoring]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/monitoring.md
+[multiple-cluster]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/disaster-recovery.md#standby-cluster-overview
+[pool]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/connection-pooling.md
+[provisioning]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/create-cluster.md
+[resize-cluster]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/resize-cluster.md
+[single-namespace]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/installation.md#installation-mode
+[tls]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/customize-cluster.md#customize-tls
+[update-postgres]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/update-cluster.md
 [k8s-anti-affinity]: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#inter-pod-affinity-and-anti-affinity
 [k8s-namespaces]: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
 [k8s-nodes]: https://kubernetes.io/docs/concepts/architecture/nodes/
 [pgBackRest]: https://www.pgbackrest.org
-[pgBouncer]: https://access.crunchydata.com/documentation/postgres-operator/v5/tutorials/basic-setup/connection-pooling/
+[pgBouncer]: https://github.com/tosharewith/postgres-age-operator/blob/main/docs/connection-pooling.md
 [pgMonitor]: https://github.com/CrunchyData/pgmonitor
 
 ## Included Components
@@ -181,14 +185,14 @@ Deploy PGO to watch Postgres clusters in all of your [namespaces][k8s-namespaces
   - [pgAudit Analyze](https://github.com/pgaudit/pgaudit_analyze)
   - [pg_cron](https://github.com/citusdata/pg_cron)
   - [pg_partman](https://github.com/pgpartman/pg_partman)
-  - [pgnodemx](https://github.com/CrunchyData/pgnodemx)
+  - [pgnodemx](https://github.com/tosharewith/pgnodemx)
   - [set_user](https://github.com/pgaudit/set_user)
   - [TimescaleDB](https://github.com/timescale/timescaledb) (Apache-licensed community edition)
   - [wal2json](https://github.com/eulerto/wal2json)
 - [pgBackRest](https://pgbackrest.org/)
 - [pgBouncer](http://pgbouncer.github.io/)
 - [pgAdmin 4](https://www.pgadmin.org/)
-- [pgMonitor](https://github.com/CrunchyData/pgmonitor)
+- [pgMonitor](https://github.com/tosharewith/pgmonitor)
 - [Patroni](https://patroni.readthedocs.io/)
 - [LLVM](https://llvm.org/) (for [JIT compilation](https://www.postgresql.org/docs/current/jit.html))
 
@@ -197,14 +201,14 @@ In addition to the above, the geospatially enhanced PostgreSQL + PostGIS contain
 - [PostGIS](http://postgis.net/)
 - [pgRouting](https://pgrouting.org/)
 
-[PostgreSQL Operator Monitoring](https://access.crunchydata.com/documentation/postgres-operator/latest/architecture/monitoring/) uses the following components:
+[PostgreSQL Operator Monitoring](https://github.com/tosharewith/postgres-age-operator/blob/main/docs/monitoring.md) uses the following components:
 
-- [pgMonitor](https://github.com/CrunchyData/pgmonitor)
+- [pgMonitor](https://github.com/tosharewith/pgmonitor)
 - [Prometheus](https://github.com/prometheus/prometheus)
 - [Grafana](https://github.com/grafana/grafana)
 - [Alertmanager](https://github.com/prometheus/alertmanager)
 
-For more information about which versions of the PostgreSQL Operator include which components, please visit the [compatibility](https://access.crunchydata.com/documentation/postgres-operator/v5/references/components/) section of the documentation.
+For more information about which versions of the PostgreSQL Operator include which components, please visit the [compatibility](https://github.com/tosharewith/postgres-age-operator/blob/main/docs/compatibility.md) section of the documentation.
 
 ## Supported Platforms
 
@@ -274,19 +278,19 @@ Areas where we need help:
 
 # Releases
 
-When a PostgreSQL Operator general availability (GA) release occurs, the container images are distributed on the following platforms in order:
+When a PostgreSQL AGE Operator general availability (GA) release occurs, the container images are distributed on the following platforms:
 
-- [Crunchy Data Customer Portal](https://access.crunchydata.com/)
-- [Crunchy Data Developer Portal](https://www.crunchydata.com/developers)
+- [GitHub Releases](https://github.com/tosharewith/postgres-age-operator/releases)
+- [Docker Hub](https://hub.docker.com/r/tosharewith/postgres-age-operator)
 
-The image rollout can occur over the course of several days.
-
-To stay up-to-date on when releases are made available in the [Crunchy Data Developer Portal](https://www.crunchydata.com/developers), please sign up for the [Crunchy Data Developer Program Newsletter](https://www.crunchydata.com/developers#email). You can also [join the PGO project community discord](https://discord.gg/a7vWKG8Ec9)
+To stay up-to-date on releases, please:
+- Watch this repository for release notifications
+- Subscribe to our [GitHub Discussions](https://github.com/tosharewith/postgres-age-operator/discussions)
 
 # FAQs, License and Terms
 
-For more information regarding PGO, the Postgres Operator project from Crunchy Data, and Crunchy Postgres for Kubernetes, please see the [frequently asked questions](https://access.crunchydata.com/documentation/postgres-operator/latest/faq). 
+For more information regarding the PostgreSQL AGE Operator, please see the [frequently asked questions](https://github.com/tosharewith/postgres-age-operator/blob/main/docs/faq.md). 
 
-The installation instructions provided in this repo are designed for the use of PGO along with Crunchy Data's Postgres distribution, Crunchy Postgres, as Crunchy Postgres for Kubernetes. The unmodified use of these installation instructions will result in downloading container images from Crunchy Data repositories - specifically the Crunchy Data Developer Portal. The use of container images downloaded from the Crunchy Data Developer Portal are subject to the [Crunchy Data Developer Program terms](https://www.crunchydata.com/developers/terms-of-use).  
+The installation instructions provided in this repository are designed for deploying PostgreSQL clusters with Apache AGE graph database functionality on Kubernetes. Container images are built locally or obtained from public repositories as specified in the documentation.  
 
-The PGO Postgres Operator project source code is available subject to the [Apache 2.0 license](LICENSE.md) with the PGO logo and branding assets covered by [our trademark guidelines](docs/static/logos/TRADEMARKS.md).
+The PostgreSQL AGE Operator project source code is available subject to the [Apache 2.0 license](LICENSE.md).

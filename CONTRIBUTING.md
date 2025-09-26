@@ -1,11 +1,12 @@
-The Postgres Operator is an open source project primarily authored and
-maintained by the team at Crunchy Data. All contributions are welcome: the
-Postgres Operator uses the Apache 2.0 license and does not require any
-contributor agreement to submit patches.
+The PostgreSQL AGE Operator is a fork of the Postgres Operator, extending it
+with Apache AGE graph database functionality. This project was originally
+developed by Crunchy Data and is now maintained as a community fork.
+All contributions are welcome: this project uses the Apache 2.0 license and
+does not require any contributor agreement to submit patches.
 
 Our contributors try to follow good software development practices to help
 ensure that the code that we ship to our users is stable. If you wish to
-contribute to the Postgres Operator, be it code or documentation, please follow
+contribute to the PostgreSQL AGE Operator, be it code or documentation, please follow
 the guidelines below.
 
 Thanks! We look forward to your contribution.
@@ -78,7 +79,7 @@ If you wish to tag a GitHub issue or another project management tracker, please
 do so at the bottom of the commit message, and make it clearly labeled like so:
 
 ```
-Issue: CrunchyData/postgres-operator#123
+Issue: tosharewith/postgres-age-operator#123
 ```
 
 # Submitting Pull Requests

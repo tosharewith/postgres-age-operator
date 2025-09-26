@@ -1,0 +1,41 @@
+PostgreSQL AGE Operator
+This product includes software originally developed by Crunchy Data Solutions, Inc.
+and contributors as part of the Postgres Operator (PGO) project.
+
+Original project: https://github.com/CrunchyData/postgres-operator
+Copyright: 2017-2025 Crunchy Data Solutions, Inc.
+License: Apache License 2.0
+
+The PostgreSQL AGE Operator is a derivative work that extends the original
+Postgres Operator with Apache AGE graph database functionality. The original
+Postgres Operator source code is available under the Apache License 2.0.
+
+This derivative work maintains compatibility with the Apache License 2.0
+and includes attribution to the original creators as required by the license.
+
+Apache AGE integration and modifications are additions to the original work
+and are distributed under the same Apache License 2.0 terms.
+
+The original Postgres Operator provided the foundation for:
+- Kubernetes operator architecture
+- PostgreSQL cluster management
+- High availability features
+- Backup and recovery functionality
+- Security and TLS implementation
+- Monitoring integration
+- Container orchestration patterns
+
+Additional components and their respective copyright holders:
+
+Apache AGE
+Copyright Apache Software Foundation
+License: Apache License 2.0
+https://age.apache.org/
+
+PostgreSQL
+Copyright PostgreSQL Global Development Group
+License: PostgreSQL License
+https://www.postgresql.org/
+
+Other dependencies retain their original copyright and license terms
+as specified in their respective repositories and documentation.
