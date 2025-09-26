@@ -1,0 +1,206 @@
+# PostgreSQL AGE Operator API Server Deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-age-api
+  namespace: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+rules:
+# Permissions to manage customer namespaces
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["*"]
+# Permissions to manage customer service accounts
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["*"]
+# Permissions to manage customer RBAC
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+  verbs: ["*"]
+# Permissions to manage customer deployments
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["*"]
+# Permissions to read cluster state
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+# Permissions to manage PostgreSQL clusters (for monitoring)
+- apiGroups: ["postgres-operator.crunchydata.com"]
+  resources: ["postgresclusters", "pgadmins", "pgupgrades"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: postgres-age-api
+subjects:
+- kind: ServiceAccount
+  name: postgres-age-api
+  namespace: postgres-age-api
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-age-api-config
+  namespace: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+type: Opaque
+data:
+  # Base64 encoded API key - change this for production!
+  # echo -n "your-secure-api-key-here" | base64
+  api-key: eW91ci1zZWN1cmUtYXBpLWtleS1oZXJl
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-age-api
+  namespace: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-age-api
+      app.kubernetes.io/component: api-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-age-api
+        app.kubernetes.io/component: api-server
+    spec:
+      serviceAccountName: postgres-age-api
+      containers:
+      - name: api-server
+        image: localhost/postgres-age-api:latest
+        imagePullPolicy: Never
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "8080"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: postgres-age-api-config
+              key: api-key
+        - name: DEBUG
+          value: "false"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-age-api
+  namespace: postgres-age-api
+  labels:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: postgres-age-api
+    app.kubernetes.io/component: api-server
+---
+# Optional: Ingress for external access
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: postgres-age-api
+#   namespace: postgres-age-api
+#   labels:
+#     app.kubernetes.io/name: postgres-age-api
+#     app.kubernetes.io/component: api-server
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     nginx.ingress.kubernetes.io/rewrite-target: /
+# spec:
+#   rules:
+#   - host: postgres-age-api.local
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: postgres-age-api
+#             port:
+#               number: 80
