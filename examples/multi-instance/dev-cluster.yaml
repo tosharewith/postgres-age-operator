@@ -1,0 +1,60 @@
+# Example PostgreSQL AGE cluster for development environment
+# Deploy this after running: ./scripts/install-client.sh --client dev --image-tag dev-latest
+
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: age-dev-cluster
+  namespace: postgres-operator-dev  # Client-specific namespace
+  labels:
+    app.kubernetes.io/client: dev
+    app.kubernetes.io/environment: development
+spec:
+  image: localhost/postgres-age-patroni
+  postgresVersion: 16
+
+  instances:
+  - name: instance1
+    replicas: 1  # Single instance for dev
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+    dataVolumeClaimSpec:
+      accessModes:
+      - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 5Gi  # Smaller storage for dev
+
+  backups:
+    pgbackrest:
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi9-2.54.2-2520
+      repos:
+      - name: repo1
+        volume:
+          volumeClaimSpec:
+            accessModes:
+            - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: 10Gi
+
+  # AGE-specific configuration
+  users:
+  - name: age_dev_user
+    databases:
+    - age_dev_db
+    options: "CREATEDB CREATEROLE"
+
+  # Development-specific PostgreSQL configuration
+  config:
+    settings:
+      shared_preload_libraries: "age"
+      age.graph_path: "/var/lib/postgresql/data/age"
+      log_statement: "all"
+      log_min_duration_statement: "500ms"  # More verbose logging for dev
+      log_line_prefix: "%t [%p]: [%l-1] user=%u,db=%d,client=%h "

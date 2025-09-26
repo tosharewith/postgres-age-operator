@@ -1,0 +1,65 @@
+# Example PostgreSQL AGE cluster for client "acme-corp"
+# Deploy this after running: ./scripts/install-client.sh --client acme-corp
+
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: age-cluster
+  namespace: postgres-operator-acme-corp  # Client-specific namespace
+  labels:
+    app.kubernetes.io/client: acme-corp
+    app.kubernetes.io/environment: production
+spec:
+  image: localhost/postgres-age-patroni
+  postgresVersion: 16
+
+  instances:
+  - name: instance1
+    replicas: 2
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    dataVolumeClaimSpec:
+      accessModes:
+      - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 10Gi
+
+  backups:
+    pgbackrest:
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi9-2.54.2-2520
+      repos:
+      - name: repo1
+        volume:
+          volumeClaimSpec:
+            accessModes:
+            - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: 20Gi
+
+  # Enable monitoring
+  monitoring:
+    pgmonitor:
+      exporter:
+        image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres-exporter:ubi9-0.17.1-2520
+
+  # AGE-specific configuration
+  users:
+  - name: age_user
+    databases:
+    - age_db
+    options: "CREATEDB"
+
+  # Custom PostgreSQL configuration for AGE
+  config:
+    settings:
+      shared_preload_libraries: "age"
+      age.graph_path: "/var/lib/postgresql/data/age"
+      log_statement: "all"
+      log_min_duration_statement: "1000ms"

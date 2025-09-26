@@ -1,0 +1,18 @@
+# Patch ClusterRole and ClusterRoleBinding to have unique names per client
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: postgres-operator-CLIENT_NAME
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: postgres-operator-CLIENT_NAME
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: postgres-operator-CLIENT_NAME
+subjects:
+- kind: ServiceAccount
+  name: CLIENT_NAME-pgo-age
+  namespace: postgres-operator-CLIENT_NAME

@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# This is a template that will be processed by the install script
+# Variables will be replaced:
+# - CLIENT_NAME
+# - INSTANCE_NAME
+# - IMAGE_TAG
+
+namespace: postgres-operator-CLIENT_NAME
+
+namePrefix: CLIENT_NAME-
+nameSuffix: -age
+
+labels:
+- includeSelectors: true
+  pairs:
+    postgres-operator.crunchydata.com/control-plane: postgres-operator-CLIENT_NAME
+    app.kubernetes.io/instance: CLIENT_NAME-age
+    app.kubernetes.io/client: CLIENT_NAME
+
+resources:
+- ../crd
+- ../rbac
+- ../manager
+
+# Patch the ClusterRole and ClusterRoleBinding names to avoid conflicts
+patchesStrategicMerge:
+- cluster-resources.yaml
+
+images:
+- name: postgres-operator
+  newName: localhost/postgres-age-operator
+  newTag: IMAGE_TAG
