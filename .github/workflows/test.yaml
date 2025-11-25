@@ -15,7 +15,7 @@ jobs:
   go-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with: { go-version: stable }
 
@@ -33,7 +33,7 @@ jobs:
       matrix:
         kubernetes: ['default']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with: { go-version: stable }
 
@@ -45,7 +45,7 @@ jobs:
 
       # Upload coverage to GitHub
       - run: gzip envtest.coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: "~coverage~kubernetes-api=${{ matrix.kubernetes }}"
           path: envtest.coverage.gz
@@ -60,7 +60,7 @@ jobs:
       matrix:
         kubernetes: [v1.33, v1.28]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with: { go-version: stable }
 
@@ -80,7 +80,7 @@ jobs:
 
       # Upload coverage to GitHub
       - run: gzip envtest-existing.coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: "~coverage~kubernetes-k3d=${{ matrix.kubernetes }}"
           path: envtest-existing.coverage.gz
@@ -94,7 +94,7 @@ jobs:
       matrix:
         kubernetes: [v1.33, v1.28]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with: { go-version: stable }
 
@@ -174,10 +174,10 @@ jobs:
       - kubernetes-api
       - kubernetes-k3d
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with: { go-version: stable }
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with: { path: download }
 
       # Combine the coverage profiles by taking the mode line from any one file
@@ -201,7 +201,7 @@ jobs:
 
       # Upload coverage to GitHub
       - run: gzip total-coverage.html
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: coverage-report=html
           path: total-coverage.html.gz

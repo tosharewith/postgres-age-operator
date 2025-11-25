@@ -20,7 +20,7 @@ jobs:
 
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       # Install Go and produce a SARIF report. This fails only when the tool is
       # unable to scan.
@@ -35,7 +35,7 @@ jobs:
       # succeed or fail according to branch protection rules.
       # - https://docs.github.com/en/code-security/code-scanning
       - name: Upload results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'govulncheck-results.sarif'
 
